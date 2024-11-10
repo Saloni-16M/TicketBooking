@@ -39,16 +39,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($conn->query($sql) === TRUE) {
         $user_id = $conn->insert_id; // Get the inserted user's ID
 
-        // Generate QR code containing user ID
-        // $qr_data = "user_id=" . $user_id;
-        // Generate QR code containing the URL for verification
-$qr_data = "http://localhost/Qr_web/verify_user.php?user_id=" . $user_id; // Updated line
+        // Generate QR code containing user ID for verification
+        $qr_data = "http://localhost/Qr_web/verify_user.php?user_id=" . $user_id;
 
-        $qr_file = 'qr_codes/' . $user_id . '.png';
-        QRcode::png($qr_data, $qr_file, 'L', 4, 4); // Create QR code image
+        // Capture the QR code output as a string
+        ob_start();  // Start output buffering
+        QRcode::png($qr_data, null, QR_ECLEVEL_L, 4);  // Generate QR code
+        $qr_image = ob_get_contents();  // Get the QR code image data
+        ob_end_clean();  // End buffering
 
-        // Store the generated QR code path in tickets table
-        $sql = "INSERT INTO tickets (user_id, qr_code) VALUES ('$user_id', '$qr_file')";
+        // Base64 encode the image data
+        $qr_image_base64 = base64_encode($qr_image);
+
+        // Store the QR data (string) in the database
+        $sql = "INSERT INTO tickets (user_id, qr_token) VALUES ('$user_id', '$qr_data')";
         if (!$conn->query($sql)) {
             echo "Error: " . $conn->error;
         }
@@ -56,7 +60,7 @@ $qr_data = "http://localhost/Qr_web/verify_user.php?user_id=" . $user_id; // Upd
         // Log the action
         log_action('Ticket generated', "User ID: $user_id, Name: $name, Roll No: $roll_no");
 
-        // Display the ticket with Bootstrap styling
+        // Display the ticket with Bootstrap styling and embedded QR code
         echo "
         <!DOCTYPE html>
         <html lang='en'>
@@ -72,7 +76,7 @@ $qr_data = "http://localhost/Qr_web/verify_user.php?user_id=" . $user_id; // Upd
                 <p><strong>Name:</strong> $name</p>
                 <p><strong>Roll No:</strong> $roll_no</p>
                 <p><strong>Scan this QR code at the event:</strong></p>
-                <img src='$qr_file' class='img-fluid' alt='QR Code'>
+                <img src='data:image/png;base64,$qr_image_base64' class='img-fluid' alt='QR Code'>
                 <br><a href='index.php' class='btn btn-primary mt-3'>Generate Another Ticket</a>
                 <br><a href='download_ticket.php?user_id=$user_id' class='btn btn-success mt-3'>Download Ticket</a>
             </div>

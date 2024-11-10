@@ -1,48 +1,52 @@
 <?php
 // download_ticket.php
 
-// Include database connection and FPDF library
-require_once 'db_connect.php';  // Database connection
-require_once 'fpdf/fpdf.php';    // FPDF library
+require_once 'fpdf/fpdf.php'; // Include FPDF
+require_once 'db_connect.php'; // Include database connection
+require_once 'phpqrcode/qrlib.php'; // Include QR code library
 
-// Check if user_id is provided in the URL
 if (isset($_GET['user_id'])) {
     $user_id = $_GET['user_id'];
 
     // Fetch user details from the database
-    $sql = "SELECT u.name, u.roll_no, t.qr_code FROM users u 
-            JOIN tickets t ON u.id = t.user_id WHERE u.id = '$user_id'";
+    $sql = "SELECT * FROM users WHERE id = '$user_id'";
     $result = $conn->query($sql);
-
+    
     if ($result->num_rows > 0) {
-        $row = $result->fetch_assoc();
+        $user = $result->fetch_assoc();
+        $name = $user['name'];
+        $roll_no = $user['roll_no'];
 
-        // Create a new PDF document
+        // Generate QR code containing the URL for verification
+        $qr_data = "http://localhost/Qr_web/verify_user.php?user_id=" . $user_id;
+
+        // Create a temporary QR code image file
+        $temp_qr_file = 'qr_codes/temp_' . $user_id . '.png'; // Temporary file name
+        QRcode::png($qr_data, $temp_qr_file, QR_ECLEVEL_L, 4); // Generate QR code image
+
+        // Create PDF
         $pdf = new FPDF();
         $pdf->AddPage();
         $pdf->SetFont('Arial', 'B', 16);
-
-        // Title
         $pdf->Cell(0, 10, 'Event Ticket', 0, 1, 'C');
-        $pdf->Ln(10);  // Line break
+        $pdf->Ln(10);
+        $pdf->Cell(0, 10, 'Name: ' . $name, 0, 1);
+        $pdf->Cell(0, 10, 'Roll No: ' . $roll_no, 0, 1);
+        $pdf->Ln(10);
+        $pdf->Cell(0, 10, 'Scan this QR code at the event:', 0, 1);
+        $pdf->Image($temp_qr_file, 30, 70, 100, 100); // Use the temporary image file
 
-        // User details
-        $pdf->SetFont('Arial', 'I', 12);
-        $pdf->Cell(0, 10, 'Name: ' . $row['name'], 0, 1);
-        $pdf->Cell(0, 10, 'Roll No: ' . $row['roll_no'], 0, 1);
-        $pdf->Ln(10);  // Line break
+        // Output the PDF
+        $pdf->Output('D', 'ticket.pdf');
 
-        // QR Code
-        $pdf->Cell(0, 10, 'Scan the QR Code:', 0, 1);
-        $pdf->Image($row['qr_code'], 30, $pdf->GetY(), 100, 100);  // Adjust dimensions as needed
+        // Delete the temporary QR code file
+        unlink($temp_qr_file); // Remove the temporary file
 
-        // Output the PDF to the browser
-        $pdf->Output('D', 'Ticket_' . $row['roll_no'] . '.pdf'); // Download the PDF
     } else {
-        echo "No ticket found for this user.";
+        echo "No user found.";
     }
 } else {
-    echo "Invalid request.";
+    echo "No user ID provided.";
 }
 
 // Close the database connection
